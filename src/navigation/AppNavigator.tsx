@@ -1,39 +1,83 @@
 import React from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
 import { useAuth } from '../context/AuthContext';
+import { useMessaging, usersById } from '../context/MessagingContext';
 import { LoginScreen } from '../screens/LoginScreen';
-import { DashboardScreen } from '../screens/DashboardScreen';
-import { ProductsScreen } from '../screens/ProductsScreen';
-import { ScannerScreen } from '../screens/ScannerScreen';
-import { MovementsScreen } from '../screens/MovementsScreen';
-import { ReportsScreen } from '../screens/ReportsScreen';
-import { LabelsScreen } from '../screens/LabelsScreen';
-import { AdminScreen } from '../screens/AdminScreen';
+import { ChatsScreen } from '../screens/ChatsScreen';
+import { ChatRoomScreen } from '../screens/ChatRoomScreen';
+import { ContactsScreen } from '../screens/ContactsScreen';
+import { ProfileScreen } from '../screens/ProfileScreen';
 
-const Stack = createNativeStackNavigator();
+export type InboxStackParamList = {
+  Chats: undefined;
+  ChatRoom: { roomId: string };
+};
+
+const RootStack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
+const InboxStack = createNativeStackNavigator<InboxStackParamList>();
 
-function MainTabs() {
-  const { profile } = useAuth();
+function InboxNavigator() {
+  const { rooms } = useMessaging();
 
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }}>
-      <Tab.Screen name="Dashboard" component={DashboardScreen} />
-      <Tab.Screen name="Productos" component={ProductsScreen} />
-      <Tab.Screen name="Escaner" component={ScannerScreen} />
-      <Tab.Screen name="Movimientos" component={MovementsScreen} />
-      <Tab.Screen name="Reportes" component={ReportsScreen} />
-      <Tab.Screen name="Etiquetas" component={LabelsScreen} />
-      {profile?.role === 'ADMIN' ? <Tab.Screen name="Administración" component={AdminScreen} /> : null}
+    <InboxStack.Navigator>
+      <InboxStack.Screen
+        name="Chats"
+        component={ChatsScreen}
+        options={{ title: 'Mensajes del colegio' }}
+      />
+      <InboxStack.Screen
+        name="ChatRoom"
+        component={ChatRoomScreen}
+        options={({ route }) => ({
+          title: rooms.find((room) => room.id === route.params.roomId)?.title ?? 'Conversación',
+        })}
+      />
+    </InboxStack.Navigator>
+  );
+}
+
+function MainTabs() {
+  const { profile, signOut } = useAuth();
+
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        headerRight: () => (
+          <Pressable onPress={() => signOut()} style={{ paddingHorizontal: 10, paddingVertical: 6 }}>
+            <Text style={{ color: '#1A73E8', fontWeight: '700' }}>Salir</Text>
+          </Pressable>
+        ),
+      }}
+    >
+      <Tab.Screen
+        name="Inbox"
+        component={InboxNavigator}
+        options={{ title: profile?.role === 'apoderado' ? 'Comunidad escolar' : 'Bandeja docente', headerShown: false }}
+      />
+      <Tab.Screen
+        name="Contactos"
+        component={ContactsScreen}
+        options={{
+          title: 'Contactos',
+          headerTitle: profile?.role === 'apoderado' ? 'Equipo docente' : 'Apoderados del curso',
+        }}
+      />
+      <Tab.Screen
+        name="Perfil"
+        component={ProfileScreen}
+        options={{ title: 'Perfil' }}
+      />
     </Tab.Navigator>
   );
 }
 
 export function AppNavigator() {
-  const { session, loading, profile } = useAuth();
+  const { session, loading } = useAuth();
 
   if (loading) {
     return (
@@ -44,18 +88,19 @@ export function AppNavigator() {
   }
 
   return (
-    <Stack.Navigator>
+    <RootStack.Navigator>
       {!session ? (
-        <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-      ) : !profile?.is_active ? (
-        <Stack.Screen
-          name="Inactive"
-          component={LoginScreen}
-          options={{ title: 'Usuario desactivado' }}
-        />
+        <RootStack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
       ) : (
-        <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
+        <RootStack.Screen
+          name="Main"
+          component={MainTabs}
+          options={{
+            title: usersById[session.userId]?.name ?? 'Comunidad escolar',
+            headerShown: false,
+          }}
+        />
       )}
-    </Stack.Navigator>
+    </RootStack.Navigator>
   );
 }

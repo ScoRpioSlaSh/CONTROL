@@ -1,75 +1,45 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { Session } from '@supabase/supabase-js';
+import React, { createContext, useContext, useMemo, useState } from 'react';
 
-import { supabase } from '../lib/supabase';
-import { Profile } from '../types/domain';
+import { mockUsers } from '../data/mockSchoolChatData';
+import { AppUser } from '../types/chat';
 
 interface AuthContextValue {
-  session: Session | null;
-  profile: Profile | null;
+  session: { userId: string } | null;
+  profile: AppUser | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  users: AppUser[];
+  signInAs: (userId: string) => Promise<void>;
   signOut: () => Promise<void>;
-  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<AppUser | null>(null);
 
-  const refreshProfile = async () => {
-    const userId = session?.user.id;
-    if (!userId) {
-      setProfile(null);
-      return;
+  const signInAs = async (userId: string) => {
+    const selected = mockUsers.find((user) => user.id === userId);
+    if (!selected) {
+      throw new Error('Usuario no encontrado');
     }
 
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    setProfile(data as Profile);
-  };
-
-  useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-    });
-
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    refreshProfile();
-  }, [session?.user.id]);
-
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    setProfile(selected);
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
     setProfile(null);
   };
 
   const value = useMemo(
     () => ({
-      session,
+      session: profile ? { userId: profile.id } : null,
       profile,
-      loading,
-      signIn,
+      loading: false,
+      users: mockUsers,
+      signInAs,
       signOut,
-      refreshProfile,
     }),
-    [session, profile, loading],
+    [profile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
